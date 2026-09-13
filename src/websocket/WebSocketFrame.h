@@ -2,6 +2,8 @@
 #include "transport/BufferedReader.h"
 #include <string>
 
+constexpr size_t kMaxWsFramePayload = 4096;
+
 struct WsFrame {
     bool finbit = 0;
     size_t opcode = 0;

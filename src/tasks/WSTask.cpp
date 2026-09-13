@@ -2,6 +2,7 @@
 #include "websocket/WebSocketFrame.h"
 #include "transport/BufferedReader.h"
 #include <utility>
+#include <string>
 
 WSTask::WSTask(Connection conn) : connection_(std::move(conn)) {}
 
@@ -10,6 +11,8 @@ void WSTask::run_task() {
     printf("WebSocket uprade established\n");
 
     BufferedReader reader(connection_);
+    size_t pOpc = 0;
+    std::string accumulator_;
 
     for(;;) {
         tcp::Result<WsFrame> try_parse = WebSocket::parse_frame(reader);
@@ -18,21 +21,65 @@ void WSTask::run_task() {
             return;
         }
         size_t opcode_ = try_parse.value().opcode;
+        bool finbit_ = try_parse.value().finbit;
 
         switch(opcode_)
         {
-            //Text
-            case(0x1):
-                {
-                    WsFrame ret;
+            //Echo
+            case(0x0):
+            {
+                if(pOpc == 0) {
+                    fprintf(stderr, "Protocol Error: Continuation with nothing open to continue."); return;
+                }
+                WsFrame ret;
+                if(finbit_) {
                     ret.finbit = true;
-                    ret.opcode = 0x1;
-                    ret.payload = try_parse.value().payload;
+                    ret.opcode = pOpc;
+                } else {
+                    ret.finbit = false;
+                }
+
+                accumulator_ += try_parse.value().payload;
+
+                if(finbit_) {
+                    ret.payload = accumulator_;
 
                     std::string out = WebSocket::serialize_frame(ret);
                     tcp::Result<void> try_write = connection_.write_all(out.data(), out.size());
+
                     if(!try_write) {
                         fprintf(stderr, "Connection write error failed: code %d\n", try_write.error());
+                    }
+                    accumulator_.clear();
+                    pOpc = 0;
+                }
+            }
+            break;
+            //Text
+            case(0x1):
+                {
+                    if(pOpc != 0) {
+                        fprintf(stderr, "Protocol Error: The client started a new message before finishing the last fragmented one."); return;
+                    }
+                    WsFrame ret;
+                    if(finbit_) {
+                        ret.finbit = true;
+                        ret.opcode = 0x1;
+                    } else {
+                        ret.finbit = false;
+                        pOpc = opcode_;
+                    }
+                    if(finbit_) {
+                        ret.payload = try_parse.value().payload;
+                        std::string out = WebSocket::serialize_frame(ret);
+                        tcp::Result<void> try_write = connection_.write_all(out.data(), out.size());
+
+                        if(!try_write) {
+                            fprintf(stderr, "Connection write error failed: code %d\n", try_write.error());
+                        }
+                    } else {
+                        accumulator_ += try_parse.value().payload;
+
                     }
                 }
                 break;
@@ -40,15 +87,28 @@ void WSTask::run_task() {
             //Binary
             case(0x2):
                 {
+                    if(pOpc != 0) {
+                        fprintf(stderr, "Protocol Error: The client started a new message before finishing the last fragmented one."); return;
+                    }
                     WsFrame ret;
-                    ret.finbit = true;
-                    ret.opcode = 0x2;
-                    ret.payload = try_parse.value().payload;
+                    if(finbit_) {
+                        ret.finbit = true;
+                        ret.opcode = 0x2;
+                    } else {
+                        ret.finbit = false;
+                        pOpc = opcode_;
+                    }
 
-                    std::string out = WebSocket::serialize_frame(ret);
-                    tcp::Result<void> try_write = connection_.write_all(out.data(), out.size());
-                    if(!try_write) {
-                        fprintf(stderr, "Connection write error failed: code %d\n", try_write.error());
+                    if(finbit_) {
+                        ret.payload = try_parse.value().payload;
+                        std::string out = WebSocket::serialize_frame(ret);
+                        tcp::Result<void> try_write = connection_.write_all(out.data(), out.size());
+
+                        if(!try_write) {
+                            fprintf(stderr, "Connection write error failed: code %d\n", try_write.error());
+                        }
+                    } else {
+                        accumulator_ += try_parse.value().payload;
                     }
                 }
                 break;

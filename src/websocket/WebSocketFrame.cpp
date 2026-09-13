@@ -55,6 +55,9 @@ tcp::Result<WsFrame> WebSocket::parse_frame(BufferedReader& reader) {
     size_t b1 = try_read.value().bytes[1];
 
     size_t top = (b1 >> 7) & 0x1;
+    if (top != 1) {
+        return tcp::Result<WsFrame>::err(-1); // RFC 6455 5.1: client frames must be masked
+    }
     size_t bot = b1 & 0x7F;
 
     if(bot == 126) {
@@ -92,19 +95,25 @@ tcp::Result<WsFrame> WebSocket::parse_frame(BufferedReader& reader) {
             |  static_cast<size_t>(static_cast<unsigned char>(next8.value().bytes[7]));
     }
 
-    std::string mask_key;
-    if(top == 1) {
-        tcp::Result<tcp::BufferedResult> next4 = reader.read_exact(4);
-        if(!next4) {
-            //WebSocket read error
-            return tcp::Result<WsFrame>::err(next4.error());
-        }
-        if(!next4.value().complete) {
-            //Incomplete read ?
-            return tcp::Result<WsFrame>::err(-1);
-        }
-        mask_key = next4.value().bytes;
+    if ((opcode_ & 0x8) && (!finbit_ || bot > 125)) {
+        return tcp::Result<WsFrame>::err(-1);
     }
+
+    if (bot > kMaxWsFramePayload) {
+        return tcp::Result<WsFrame>::err(-1);
+    }
+
+    std::string mask_key;
+    tcp::Result<tcp::BufferedResult> next4 = reader.read_exact(4);
+    if(!next4) {
+        //WebSocket read error
+        return tcp::Result<WsFrame>::err(next4.error());
+    }
+    if(!next4.value().complete) {
+        //Incomplete read ?
+        return tcp::Result<WsFrame>::err(-1);
+    }
+    mask_key = next4.value().bytes;
 
     tcp::Result<tcp::BufferedResult> try_all = reader.read_exact(bot);
     if(!try_all) {
@@ -116,14 +125,9 @@ tcp::Result<WsFrame> WebSocket::parse_frame(BufferedReader& reader) {
         return tcp::Result<WsFrame>::err(-1);
     }
 
-    if(top == 1) {
-        int len = try_all.value().bytes.size();
-        for(int i = 0; i < len; i++) {
-            local_frame.payload += try_all.value().bytes[i] ^ mask_key[i % 4];
-        }
-    } else {
-        local_frame.payload = try_all.value().bytes;
+    int len = try_all.value().bytes.size();
+    for(int i = 0; i < len; i++) {
+        local_frame.payload += try_all.value().bytes[i] ^ mask_key[i % 4];
     }
-
     return tcp::Result<WsFrame>::ok(local_frame);
 }
