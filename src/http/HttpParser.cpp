@@ -11,25 +11,40 @@
 #include <iterator>
 #include <algorithm>
 
-std::string Http::route(const std::string& url) {
+tcp::Result<std::string> Http::route(const std::string& url) {
+    std::error_code ec;
 
-    static const std::unordered_map<std::string, std::string> routes = {
-        {"/", "templates/index.html"}
-    };
-    auto it = routes.find(url);
-    if (it != routes.end()) {
-        return it->second;
-    } else {
-        return "templates/index.html";
+    std::string stripped = url.substr(1);
+    std::string candidate = std::filesystem::path("templates").string() + "/" + stripped;
+    std::filesystem::path canon_path = std::filesystem::weakly_canonical(candidate, ec);
+
+    if(ec) {
+        return tcp::Result<std::string>::err(ec.value());
     }
+
+    std::filesystem::path canon_root = std::filesystem::weakly_canonical("templates", ec);
+    if(ec) {
+        return tcp::Result<std::string>::err(ec.value());
+    }
+
+    std::filesystem::path is_relative = std::filesystem::relative(canon_path, canon_root);
+    if(is_relative.string().substr(0, 2) == ".." || is_relative.string().size() == 0) {
+        //Not relative.
+        return tcp::Result<std::string>::err(-1);
+    }
+    return tcp::Result<std::string>::ok("templates/" + is_relative.string());
 }
 
 tcp::Result<HttpResponse> Http::build_response(const HttpRequest& in) {
 
-    std::string path = route(in.url);
+    tcp::Result<std::string> path = route(in.url);
 
-    if( std::filesystem::exists(path) ) {
-        std::ifstream file(path, std::ios::binary);
+    if(!path) {
+        return tcp::Result<HttpResponse>::ok(HttpResponse{404, {{"Content-Length", std::to_string(0)}}, ""});
+    };
+
+    if( std::filesystem::exists(path.value()) ) {
+        std::ifstream file(path.value(), std::ios::binary);
         if(!file) return tcp::Result<HttpResponse>::err(last_file_error());
         std::stringstream buffer;
         buffer << file.rdbuf();
