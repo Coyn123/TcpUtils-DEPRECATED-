@@ -1,14 +1,19 @@
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <memory>
 #include <thread>
 #include <utility>
+#include <semaphore>
 #include "tasks/HttpTask.h"
 #include "transport/Listener.h"
 #include "core/ResultType.h"
 #include "tasks/TaskBase.h"
 
 int main() {
+    constexpr std::ptrdiff_t RUNNING = 5;
+    std::counting_semaphore<RUNNING> sem(RUNNING);
+
     uint16_t port = 8080;
     tcp::Result<Listener> made = Listener::create(port);
     if (!made) {
@@ -33,13 +38,17 @@ int main() {
 
         std::unique_ptr<TaskBase> task = std::make_unique<HttpTask>(std::move(conn));
 
-        // std::thread moves its callable into its own storage instead of going
-        // through std::function, so a lambda holding a move-only unique_ptr
-        // works here with no wrapper needed.
-        std::thread worker([t = std::move(task)]() { t->run_task(); });
-        worker.join(); // PoC only: proves the task runs, adds no concurrency yet
+        sem.acquire();
+
+        std::thread worker([t = std::move(task), &sem]() { t->run_task(); sem.release(); });
+        worker.detach();
+    }
+    //Drain
+    for (int i = 0; i < RUNNING; i++) {
+        sem.acquire();
     }
 
     printf("\ndone -- listener closes as main returns\n");
+
     return 0;
 }
