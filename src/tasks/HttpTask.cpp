@@ -14,6 +14,19 @@ void HttpTask::run_task() {
 
     tcp::Result<HttpRequest> request = Http::build_request(reader);
     if (!request) {
+        HttpResponse bad_build;
+        bad_build.status_code = 400;
+        bad_build.headers = {{"Content-Length","0"}};
+        bad_build.body = "";
+        std::string serial = Http::serialize_response(bad_build);
+
+        tcp::Result<void> try_write_build = connection_.write_all(serial.data(), serial.size());
+
+        if(!try_write_build) {
+            fprintf(stderr, "write http build response failed: code %d\n", try_write_build.error());
+            return;
+        }
+
         fprintf(stderr, "build_request failed: code %d\n", request.error());
         return;
     }
@@ -52,9 +65,22 @@ void HttpTask::run_task() {
 
     tcp::Result<HttpResponse> response = Http::build_response(req);
     if (!response) {
+        HttpResponse bad_response;
+        bad_response.status_code = 500;
+        bad_response.headers = {{"Content-Length","0"}};
+        bad_response.body = "";
+        std::string serial_resp = Http::serialize_response(bad_response);
+
+        tcp::Result<void> try_write_resp = connection_.write_all(serial_resp.data(), serial_resp.size());
+
+        if(!try_write_resp) {
+            fprintf(stderr, "write http build response failed: code %d\n", try_write_resp.error());
+            return;
+        }
+
         fprintf(stderr, "http build_response failed: code %d\n", response.error());
         return;
-}
+    }
 
     std::string bytes = Http::serialize_response(response.value());
 

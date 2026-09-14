@@ -80,7 +80,9 @@ std::string Http::serialize_response(const HttpResponse& response) {
     static const std::unordered_map<int, std::string> reasons = {
         {200, "OK"},
         {404, "Not Found"},
-        {101, "Switching Protocols"}
+        {101, "Switching Protocols"},
+        {400, "Bad Request"},
+        {500, "Internal Server Error"}
     };
     auto it = reasons.find(response.status_code);
     std::string reason = (it != reasons.end()) ? it->second : "Unknown";
