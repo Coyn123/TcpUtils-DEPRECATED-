@@ -45,7 +45,19 @@ tcp::Result<HttpResponse> Http::build_response(const HttpRequest& in) {
     static const std::unordered_map<std::string, std::string> mime_types = {
         {".html", "text/html"},
         {".css", "text/css"},
-        {".js", "application/javascript"}
+        {".js", "application/javascript"},
+        {".json", "application/json"},
+        {".txt", "text/plain"},
+        {".xml", "application/xml"},
+        {".png", "image/png"},
+        {".jpg", "image/jpeg"},
+        {".jpeg", "image/jpeg"},
+        {".svg", "image/svg+xml"},
+        {".ico", "image/x-icon"},
+        {".webp", "image/webp"},
+        {".pdf", "application/pdf"},
+        {".woff", "font/woff"},
+        {".woff2", "font/woff2"}
     };
 
     if(!path) {

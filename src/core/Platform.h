@@ -5,6 +5,8 @@
   #include <ws2tcpip.h>
   using socket_t = SOCKET;
   inline constexpr socket_t kInvalidSocket = INVALID_SOCKET;
+  inline constexpr int kFdExhausted = WSAEMFILE;
+  inline constexpr int kSysExhausted = WSAENFILE;
   inline int close_socket(socket_t s) { return ::closesocket(s); }
   inline int last_error() { return ::WSAGetLastError(); }
   inline int last_file_error() { return static_cast<int>(::GetLastError()); }
@@ -20,6 +22,8 @@
   #include <cerrno>
   using socket_t = int;
   inline constexpr socket_t kInvalidSocket = -1;
+  inline constexpr int kFdExhausted = EMFILE;
+  inline constexpr int kSysExhausted = ENFILE;
   inline int close_socket(socket_t s) { return ::close(s); }
   inline int last_error() { return errno; }
   inline int last_file_error() { return errno; }
