@@ -9,3 +9,8 @@
 # Build artifacts
 *.exe
 *.dSYM/
+*.o
+*.out
+*.dylib
+*.a
+server
