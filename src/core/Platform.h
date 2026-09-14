@@ -7,6 +7,10 @@
   inline constexpr socket_t kInvalidSocket = INVALID_SOCKET;
   inline constexpr int kFdExhausted = WSAEMFILE;
   inline constexpr int kSysExhausted = WSAENFILE;
+  inline constexpr int kListenerBadFd = WSAEBADF;
+  inline constexpr int kListenerNotSocket = WSAENOTSOCK;
+  inline constexpr int kListenerOpNotSupported = WSAEOPNOTSUPP;
+  inline constexpr int kListenerInvalid = WSAEINVAL;
   inline int close_socket(socket_t s) { return ::closesocket(s); }
   inline int last_error() { return ::WSAGetLastError(); }
   inline int last_file_error() { return static_cast<int>(::GetLastError()); }
@@ -24,6 +28,10 @@
   inline constexpr socket_t kInvalidSocket = -1;
   inline constexpr int kFdExhausted = EMFILE;
   inline constexpr int kSysExhausted = ENFILE;
+  inline constexpr int kListenerBadFd = EBADF;
+  inline constexpr int kListenerNotSocket = ENOTSOCK;
+  inline constexpr int kListenerOpNotSupported = EOPNOTSUPP;
+  inline constexpr int kListenerInvalid = EINVAL;
   inline int close_socket(socket_t s) { return ::close(s); }
   inline int last_error() { return errno; }
   inline int last_file_error() { return errno; }

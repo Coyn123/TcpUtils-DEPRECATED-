@@ -20,6 +20,8 @@ tcp::Result<void> TcpUtil::run() {
     Listener listener = std::move(made.value());
     printf("listening on %d\n", port_);
 
+    int listener_error = 0;
+
     for (;;) {
         printf("waiting for a client...\n");
 
@@ -34,6 +36,12 @@ tcp::Result<void> TcpUtil::run() {
                 fprintf(stderr, "System-wide table full/exhausted, waiting: %s\n", strerror(incoming.error()));
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 continue;
+            }
+            if(incoming.error() == kListenerBadFd || incoming.error() == kListenerNotSocket ||
+               incoming.error() == kListenerOpNotSupported || incoming.error() == kListenerInvalid) {
+                fprintf(stderr, "Listening socket is invalid, closing server: %s\n", strerror(incoming.error()));
+                listener_error = incoming.error();
+                break;
             }
 
             fprintf(stderr, "accept failed: %s\n", strerror(incoming.error()));
@@ -57,6 +65,10 @@ tcp::Result<void> TcpUtil::run() {
     }
 
     printf("\ndone -- listener closes as main returns\n");
+
+    if (listener_error != 0) {
+        return tcp::Result<void>::err(listener_error);
+    }
 
     return tcp::Result<void>::ok();
 
