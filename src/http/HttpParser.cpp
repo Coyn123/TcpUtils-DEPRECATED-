@@ -32,24 +32,43 @@ tcp::Result<std::string> Http::route(const std::string& url) {
         //Not relative.
         return tcp::Result<std::string>::err(-1);
     }
-    return tcp::Result<std::string>::ok("templates/" + is_relative.string());
+
+    return is_relative.string() == "."
+        ? tcp::Result<std::string>::ok("templates/index.html")
+            : tcp::Result<std::string>::ok("templates/" + is_relative.string());
 }
 
 tcp::Result<HttpResponse> Http::build_response(const HttpRequest& in) {
 
     tcp::Result<std::string> path = route(in.url);
 
+    static const std::unordered_map<std::string, std::string> mime_types = {
+        {".html", "text/html"},
+        {".css", "text/css"},
+        {".js", "application/javascript"}
+    };
+
     if(!path) {
         return tcp::Result<HttpResponse>::ok(HttpResponse{404, {{"Content-Length", std::to_string(0)}}, ""});
     };
 
-    if( std::filesystem::exists(path.value()) ) {
+    std::string extension = std::filesystem::path(path.value()).extension().string();
+
+    //Lowercase normalize the extension (JIC)
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+
+    auto it = mime_types.find(extension);
+    std::string mime = (it != mime_types.end()) ? it->second : "application/octet-stream";
+
+    if( std::filesystem::is_regular_file(path.value()) ) {
         std::ifstream file(path.value(), std::ios::binary);
         if(!file) return tcp::Result<HttpResponse>::err(last_file_error());
         std::stringstream buffer;
         buffer << file.rdbuf();
         std::string body = buffer.str();
-        return tcp::Result<HttpResponse>::ok(HttpResponse{200, {{"Content-Length", std::to_string(body.size())}}, body});
+        return tcp::Result<HttpResponse>::ok(HttpResponse{200, {{"Content-Length", std::to_string(body.size())}, {"Content-Type", mime}}, body});
 
     } else {
         return tcp::Result<HttpResponse>::ok(HttpResponse{404, {{"Content-Length", std::to_string(0)}}, ""});
